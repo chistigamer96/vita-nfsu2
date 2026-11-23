@@ -111,14 +111,13 @@ typedef struct {
     /* port addition (user request, not in retail: its OrbitCarCameraMover is only
        the zone / debug camera): the right stick orbits the chase views */
     float orbit_yaw, orbit_pitch, orbit_idle;
-    /* port addition (GitHub #30, LiveArea Settings "Right stick look",
-       rstickcam.txt; 0 = the rate orbit above): the chase views turn to the
-       stick's direction (up = the normal view, down = behind); released below
-       120 deg from behind-the-car they ease back, at or past it they cut back.
-       Bumper / hood: the stick's lower half is Look Back. While turned, a wall
-       pull-in (the retail MinGapTopology pass) recovers smoothly. Idle (yaw 0)
-       = the retail camera unchanged. */
-    int orbit_mode;
+    /* Right-stick camera modes: 0 = original rate orbit, 1 = port creator
+       angle mode, 2 = custom continuous vehicle-relative 360-degree orbit.
+       Modes 1/2 use stick angle (up = default rear, down = front); release
+       below 120 degrees eases back, at/past 120 degrees snaps back. Hood and
+       bumper use the lower half as Look Back. Mode 2 applies yaw in the local
+       chase frame. Idle after return (yaw 0) leaves the retail camera untouched. */
+    int orbit_mode;                 /* 1 = creator, 2 = custom 360; 0 = legacy rate orbit */
     int orbit_held;                /* the stick out of its dead zone last frame */
     float orbit_tgt;               /* the stick's yaw while held (the release angle) */
     float orbit_dist;              /* the smoothed eye distance after the wall pass, < 0 none */

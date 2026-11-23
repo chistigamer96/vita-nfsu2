@@ -214,6 +214,7 @@ extern int vita_gfx_mode;
 /* Vita extra: right analog stick, -1..1, dead zone applied. */
 extern float vita_rstick_x, vita_rstick_y;
 extern float vita_lstick_y;   /* left stick Y, -1..1 with a dead zone (showroom camera) */
+extern float vita_orbit_x, vita_orbit_y;   /* right stick for Orbital 360, -1..1 */
 /* Vita extra: GPU probe -- the 3D pass to leave out this frame (0 = none,
    1 sky, 2 world opaque, 3 world cutout, 4 world blend+lights, 5 all cars,
    6 AI cars, 7 shadow+skid+smoke). */

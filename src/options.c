@@ -9,7 +9,7 @@
 #else
 #define OPT_FILE "cache/options.bin"
 #endif
-#define OPT_MAGIC "OUOPT004"
+#define OPT_MAGIC "OUOPT005"
 
 N2Options g_opt;
 const char *const g_vb_name[VB_COUNT] = {
@@ -89,6 +89,10 @@ const char *options_port_str(unsigned int hash) {
     case STR_REAR_TOUCH: return "Rear Touchpad";
     case STR_TOUCH_SENS: return "Rear Touch Sensitivity";
     case STR_CTL_HINT:   return "Square: Clear   Triangle: Reset all";
+    case STR_CAMERA_MODE:     return "Camera Type";
+    case STR_CAMERA_ORIGINAL: return "Original";
+    case STR_CAMERA_FREEROAM: return "Free Roam";
+    case STR_CAMERA_ORBITAL:  return "Orbital 360";
     default: return NULL;
     }
 }
@@ -115,6 +119,7 @@ void options_defaults(N2Options *o) {
     p->split = 0;                     /* Leader */
     p->stability_off = 1;             /* +0x16 = 1: shows OFF (0x4b76f0: 0 "ON" 0x63c, 1 "OFF" 0xccfa) */
     o->rear_touch = 1; o->touch_sens = 1;   /* Medium */
+    o->camera_type = 0;                    /* Original camera */
     options_ctl_preset(o, 0);   /* the original's pad layout */
 }
 
@@ -131,11 +136,16 @@ void options_load(void) {
     int ok = fread(m, 1, 8, f) == 8 && fread(&sz, 4, 1, f) == 1;
     if (ok && !memcmp(m, OPT_MAGIC, 8) && sz == sizeof o && fread(&o, sizeof o, 1, f) == 1) {
         g_opt = o;
+        if (g_opt.camera_type > 2) g_opt.camera_type = 0;
         printf("options: loaded %s\n", OPT_FILE);
-    } else if (ok && !memcmp(m, "OUOPT003", 8) && sz <= sizeof o && fread(&g_opt, sz, 1, f) == 1) {
-        /* 003 ended at ctl, which held the port's own layout: keep the
-           rest, take the original's bindings and the touchpad defaults */
+    } else if (ok && !memcmp(m, "OUOPT004", 8) && sz <= sizeof g_opt && fread(&g_opt, sz, 1, f) == 1) {
+        /* 004 predates the camera selector. Always migrate to Original. */
+        g_opt.camera_type = 0;
+        printf("options: migrated %s\n", OPT_FILE);
+    } else if (ok && !memcmp(m, "OUOPT003", 8) && sz <= sizeof g_opt && fread(&g_opt, sz, 1, f) == 1) {
+        /* Preserve the existing 003 migration. */
         g_opt.rear_touch = 1; g_opt.touch_sens = 1;
+        g_opt.camera_type = 0;
         options_ctl_preset(&g_opt, 0);
         printf("options: migrated %s\n", OPT_FILE);
     } else {

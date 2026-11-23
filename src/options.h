@@ -134,6 +134,7 @@ typedef struct {
     /* the Vita's rear touchpad (Player options, in place of the wheel rows):
        off, or its four corner zones sized by the sensitivity 0 Low 1 Medium 2 High */
     unsigned char rear_touch, touch_sens;
+    unsigned char camera_type; /* 0 Original, 1 Free Roam, 2 Orbital 360 */
 } N2Options;
 
 extern N2Options g_opt;
@@ -159,5 +160,9 @@ const char *options_port_str(unsigned int hash);
 #define STR_REAR_TOUCH 0x0a5e7001u   /* "Rear Touchpad" */
 #define STR_TOUCH_SENS 0x0a5e7002u   /* "Rear Touch Sensitivity" */
 #define STR_CTL_HINT   0x0a5e7003u   /* the Controls screen's instruction line: its buttons (GitHub #24) */
+#define STR_CAMERA_MODE     0x0a5e7004u
+#define STR_CAMERA_ORIGINAL 0x0a5e7005u
+#define STR_CAMERA_FREEROAM 0x0a5e7006u
+#define STR_CAMERA_ORBITAL  0x0a5e7007u
 
 #endif

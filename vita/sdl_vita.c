@@ -10,6 +10,7 @@
  *   Select + Start  quit                  (Esc)
  */
 #include "options.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -1709,6 +1710,7 @@ static void pad_button(uint64_t now, uint64_t vita, SDL_GameControllerButton b) 
 }
 
 float vita_rstick_x, vita_rstick_y, vita_lstick_y;
+float vita_orbit_x, vita_orbit_y;
 
 /* the rear touchpad's zone bits. A finger counts once it has stayed in its
    zone for two samples, so a brush while holding the Vita does nothing */
@@ -1802,6 +1804,16 @@ static void poll_pad(void) {
     {   /* right stick, -1..1 with a dead zone (showroom turntable / camera) */
         vita_rstick_x = (rx > 24 || rx < -24) ? (float)rx / 127.0f : 0.0f;
         vita_rstick_y = (ry > 24 || ry < -24) ? (float)ry / 127.0f : 0.0f;
+        {
+            float orbit_m = sqrtf((float)rx * (float)rx + (float)ry * (float)ry);
+            if (orbit_m > 24.0f) {
+                vita_orbit_x = (float)rx / 127.0f;
+                vita_orbit_y = (float)ry / 127.0f;
+            } else {
+                vita_orbit_x = 0.0f;
+                vita_orbit_y = 0.0f;
+            }
+        }
         vita_lstick_y = (ly > 24 || ly < -24) ? (float)ly / 127.0f : 0.0f;
     }
 

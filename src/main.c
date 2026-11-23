@@ -9775,8 +9775,22 @@ static void pzo_layout(int restart)
             float aw = 24.0f, ah = 24.0f, ax, ay;
             hud_screen_box(h, nm, &ax, &ay, &aw, &ah);
             aw = fabsf(aw); ah = fabsf(ah);
-            if (q == 0) { hud_screen_pos(h, nm, tl, tt + ry); hud_screen_label(h, nm, shop_row_name(r)); }
-            if (q == 1) { hud_screen_pos(h, nm, dcx, dt + ry); hud_screen_label(h, nm, shop_row_value(r)); }
+            if (q == 0) {
+                hud_screen_pos(h, nm, tl, tt + ry);
+                hud_screen_label(h, nm, shop_row_name(r));
+            }
+            if (q == 1) {
+                hud_screen_pos(h, nm, dcx, dt + ry);
+                if (shop_row_name(r) == STR_CAMERA_MODE) {
+                    static const char *const modes[] = {
+                        "Original", "Free Roam", "Orbital 360"
+                    };
+                    unsigned int mode = g_opt.camera_type;
+                    hud_screen_text(h, nm, modes[mode <= 2 ? mode : 0]);
+                } else {
+                    hud_screen_label(h, nm, shop_row_value(r));
+                }
+            }
             if (q == 2) hud_screen_pos(h, nm, dcx - 0.5f * dw - 0.5f * aw, dt + ry + 0.5f * ah);
             if (q == 3) hud_screen_pos(h, nm, dcx + 0.5f * dw + 0.5f * aw, dt + ry + 0.5f * ah);
             if (q == 4) hud_screen_pos(h, nm, tl + 276.0f, tt + ry + 10.0f);
@@ -10739,21 +10753,6 @@ static int fast_travel_on(void)
     return on;
 }
 static struct { int go; float p[3]; } g_ft;
-/* Right stick look (LiveArea Settings, rstickcam.txt; GitHub #30, a port
-   addition): the chase camera turns to the right stick's direction instead
-   of the rate orbit, and the bumper / hood views look back with the stick's
-   lower half (chasecam.h orbit_mode). Off by default. */
-static int rstick_look_on(void)
-{
-    static int on = -1;
-    if (on < 0) {
-        FILE *f = fopen("ux0:data/NFSU2/rstickcam.txt", "rb");
-        on = f != NULL;
-        if (f) fclose(f);
-        printf("right stick look: %s\n", on ?"on (rstickcam.txt)" : "off");
-    }
-    return on;
-}
 static void wm_free(void)
 {
     hud_free(&g_wm.dlg); hud_free(&g_wm.h);
@@ -26778,12 +26777,27 @@ int main(int argc, char **argv) {
                     for (int a = 0; a < OPT_ACT_COUNT; a++)
                         for (int k = 0; k < 2; k++)
                             if (g_opt.ctl[a][k] >= VB_RS_UP && g_opt.ctl[a][k] <= VB_RS_RIGHT) rs_bound = 1;
-                    g_ccam.orbit_mode = rstick_look_on();   /* GitHub #30: follow the stick's angle */
-                    if (!rs_bound && g_hyd_level <= 0 && !g_pause.on && !post_up() && !tun_active() &&
-                        !(g_rt.active && (g_rt.pfinished || g_rt.postrace)) && !(g_ccam.orbit_mode && rp_up())) {
-                        ox = -vita_rstick_x; oy = vita_rstick_y;   /* right: the view turns right */
+                    g_ccam.orbit_mode = g_opt.camera_type; /* 0 Original, 1 Free Roam, 2 Orbital 360 */
+                    if (g_ccam.orbit_mode == 0) {
+                        /* Original: leave the retail rear camera untouched. */
+                        g_ccam.orbit_yaw = 0.0f;
+                        g_ccam.orbit_pitch = 0.0f;
+                        g_ccam.orbit_idle = 0.0f;
+                        g_ccam.orbit_held = 0;
+                        g_ccam.stick_lb = 0;
                     }
-                    chasecam_orbit(&g_ccam, ox, oy, cc_dt);
+                    if (g_ccam.orbit_mode != 0 && !rs_bound && g_hyd_level <= 0 && !g_pause.on && !post_up() && !tun_active() &&
+                        !(g_rt.active && (g_rt.pfinished || g_rt.postrace)) && !rp_up()) {
+                        if (g_ccam.orbit_mode == 2) {
+                            ox = -vita_orbit_x;
+                            oy = vita_orbit_y;
+                        } else {
+                            ox = -vita_rstick_x;
+                            oy = vita_rstick_y;
+                        }
+                    }
+                    if (g_ccam.orbit_mode != 0)
+                        chasecam_orbit(&g_ccam, ox, oy, cc_dt);
                 }
                 chasecam_update(&g_ccam, &cc, cc_dt, g_wcoll, cobs, ncobs, &cc_out);
                 {   /* the jump cam zones' TrackCarCameraMover (ChangeCameraMover 0xf / 0x10) */

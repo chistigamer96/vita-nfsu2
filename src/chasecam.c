@@ -306,13 +306,13 @@ void chasecam_orbit(ChaseCam *c, float sx, float sy, float dt)
 {
     const float PI = 3.14159265f;
     if (dt <= 0.0f || dt > 0.25f) dt = 1.0f / 30.0f;
-    if (c->orbit_mode) {   /* GitHub #30: the camera follows the stick's angle */
+    if (c->orbit_mode == 2) {   /* GitHub #30: the camera follows the stick's angle */
         float m = sqrtf(sx * sx + sy * sy);
-        int out = m > 0.3f;
+        int out = m > (c->orbit_mode == 2 ? 0.01f : 0.3f);
         c->orbit_pitch = 0.0f;
         if (!is_chase(c->view)) {   /* bumper / hood: no orbit; the lower half looks back */
             c->orbit_yaw = 0.0f; c->orbit_held = 0;
-            c->stick_lb = out && sy > 0.0f;
+            c->stick_lb = out && (c->orbit_mode == 2 ? sy >= 0.0f : sy > 0.0f);
             if (c->stick_lb) c->lookback = 1;
             return;
         }
@@ -321,20 +321,37 @@ void chasecam_orbit(ChaseCam *c, float sx, float sy, float dt)
             /* sx = stick left (+), sy = stick down (+): up 0, right -90 deg
                (the eye on the car's left, looking right), down 180 deg */
             c->orbit_tgt = atan2f(sx, -sy);
-            float d = c->orbit_tgt - c->orbit_yaw;
-            while (d > PI) d -= 2.0f * PI;
-            while (d < -PI) d += 2.0f * PI;
-            c->orbit_yaw += d * (1.0f - expf(-14.0f * dt));
+            if (c->orbit_mode == 2 && fabsf(c->orbit_tgt) >= 120.0f * (PI / 180.0f)) {
+                /* Orbital 360: rear angles snap instantly. */
+                c->orbit_yaw = c->orbit_tgt;
+            } else {
+                /* Preserve smooth Orbital 360 movement and original Free Roam behavior. */
+                float d = c->orbit_tgt - c->orbit_yaw;
+                while (d > PI) d -= 2.0f * PI;
+                while (d < -PI) d += 2.0f * PI;
+                c->orbit_yaw += d * (1.0f - expf(-14.0f * dt));
+            }
             while (c->orbit_yaw > PI) c->orbit_yaw -= 2.0f * PI;
             while (c->orbit_yaw < -PI) c->orbit_yaw += 2.0f * PI;
             c->orbit_held = 1;
         } else {
-            if (c->orbit_held && fabsf(c->orbit_tgt) >= 120.0f * (PI / 180.0f))
-                c->orbit_yaw = 0.0f;                          /* released behind: cut back */
+            int rear_release = c->orbit_held &&
+                fabsf(c->orbit_tgt) >= 120.0f * (PI / 180.0f);
+
+            if (c->orbit_mode != 2 && rear_release)
+                c->orbit_yaw = 0.0f;  /* preserve existing Free Roam behavior */
+
+            if (c->orbit_mode == 2 && rear_release) {
+                /* Orbital 360: instant return from rear angles. */
+                c->orbit_yaw = 0.0f;
+            } else {
+                /* Side/front release: preserve the existing smooth return. */
+                float k = 1.0f - expf(-6.0f * dt);
+                c->orbit_yaw -= c->orbit_yaw * k;
+                if (fabsf(c->orbit_yaw) < 1e-3f) c->orbit_yaw = 0.0f;
+            }
+
             c->orbit_held = 0;
-            float k = 1.0f - expf(-6.0f * dt);                /* released to a side: ease back */
-            c->orbit_yaw -= c->orbit_yaw * k;
-            if (fabsf(c->orbit_yaw) < 1e-3f) c->orbit_yaw = 0.0f;
         }
         return;
     }
@@ -729,9 +746,35 @@ void chasecam_update(ChaseCam *c, const CcCar *car, float dt,
            car); the wall / traffic passes below then apply to the orbited eye */
         float d[3] = { eye[0] - look[0], eye[1] - look[1], eye[2] - look[2] };
         float cy = cosf(c->orbit_yaw), sy = sinf(c->orbit_yaw);
-        float dx = d[0] * cy - d[1] * sy, dy = d[0] * sy + d[1] * cy;
-        float h = sqrtf(dx * dx + dy * dy), rr = sqrtf(h * h + d[2] * d[2]);
-        float a = clampf(atan2f(d[2], h) + c->orbit_pitch, -0.2f, 1.4f);
+        float dx, dy, dz = d[2];
+        if (c->orbit_mode == 2) {
+            /* Custom mode: interpret yaw in the chase camera's local vehicle
+               frame, not world XY. Positive stick-left yaw places the eye on
+               the vehicle's left; zero remains the untouched vanilla rear view.
+               F[0] is chase-forward, F[1] is vehicle/camera-left. */
+            float b0[3] = { F[0][0], F[0][1], F[0][2] };
+            float b1[3] = { F[1][0], F[1][1], F[1][2] }, b2[3];
+            if (norm3(b1) < 1e-5f) {
+                const float world_up[3] = { 0.0f, 0.0f, 1.0f };
+                const float world_x[3] = { 1.0f, 0.0f, 0.0f };
+                cross3(world_up, b0, b1);
+                if (norm3(b1) < 1e-5f) { cross3(world_x, b0, b1); norm3(b1); }
+            }
+            cross3(b0, b1, b2); norm3(b2);
+            float lx = dot3(d, b0), ly = dot3(d, b1), lz = dot3(d, b2);
+            dx = lx * cy + ly * sy;
+            dy = -lx * sy + ly * cy;
+            float wx = b0[0] * dx + b1[0] * dy + b2[0] * lz;
+            float wy = b0[1] * dx + b1[1] * dy + b2[1] * lz;
+            float wz = b0[2] * dx + b1[2] * dy + b2[2] * lz;
+            dx = wx; dy = wy; dz = wz;
+        } else {
+            /* Preserve the port creator's existing world-axis implementation. */
+            dx = d[0] * cy - d[1] * sy;
+            dy = d[0] * sy + d[1] * cy;
+        }
+        float h = sqrtf(dx * dx + dy * dy), rr = sqrtf(h * h + dz * dz);
+        float a = clampf(atan2f(dz, h) + c->orbit_pitch, -0.2f, 1.4f);
         float nh = rr * cosf(a), s = h > 1e-4f ? nh / h : 0.0f;
         eye[0] = look[0] + dx * s; eye[1] = look[1] + dy * s; eye[2] = look[2] + rr * sinf(a);
         up[0] = up[1] = 0.0f; up[2] = 1.0f;

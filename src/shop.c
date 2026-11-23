@@ -391,12 +391,14 @@ enum { OR_MASTER, OR_FE_MUSIC, OR_IG_MUSIC, OR_SPEECH, OR_SFX, OR_TIRE, OR_ENGIN
        OR_TRANS, OR_STABILITY, OR_CAMERA, OR_GAUGES, OR_RACE_POS, OR_LAP_INFO, OR_SPLIT, OR_SCORE,
        OR_LEADERBOARD, OR_WHEEL, OR_FEEDBACK, OR_ASK_TRANS,
        OR_REAR_TOUCH, OR_TOUCH_SENS,     /* the Vita's rear touchpad, in the wheel rows' place */
+       OR_CAMERA_TYPE,
        OR_COUNT };
 static const uint32_t k_or_name[OR_COUNT] = {
     0x26782c3eu, 0x418e681du, 0xdf21eac2u, 0x9e5fb82au, 0xfd487543u, 0x69b745c6u, 0xa2b1f888u, 0x2881ab87u,
     0xf26a5cbfu, 0x85a6ce05u, 0xf86a6272u, 0xbc0e6c55u, 0xc6269082u, 0x9fa5ec9eu, 0x996463e6u,
     0xd31407e7u, 0xdf06ed22u, 0xf6ccdc5fu, 0xac148579u, 0x82cd8f92u, 0x969f96a5u, 0x084bc378u, 0xc03f9f19u,
-    0xc93fbfb5u, 0x4deab931u, 0x358cdcfdu, 0xbfb34120u, STR_REAR_TOUCH, STR_TOUCH_SENS };
+    0xc93fbfb5u, 0x4deab931u, 0x358cdcfdu, 0xbfb34120u, STR_REAR_TOUCH, STR_TOUCH_SENS,
+    STR_CAMERA_MODE };
 #define OPT_MAX_ROWS 12          /* the package's pool */
 #define OPT_PAGE     8           /* 0x4cf750: +0x134 = 8 */
 #define K_ARROW_WHITE 0x9943d584u   /* U2_Menu_Arrow_White: 0x54ef30 / 0x54f410 with 1 */
@@ -3520,6 +3522,7 @@ static void opt_build_rows(Shop *s) {
         break;
     case OC_GAMEPLAY:   /* 0x4b7310 */
         for (int r = OR_JUMP_CAM; r <= OR_SAVE; r++) OROW(r);
+        OROW(OR_CAMERA_TYPE);
         break;
     case OC_PLAYER:     /* 0x4b7cd0 */
         OROW(OR_TRANS); OROW(OR_STABILITY); OROW(OR_CAMERA); OROW(OR_GAUGES); OROW(OR_RACE_POS);
@@ -3567,6 +3570,7 @@ static void opt_row_change(int r, int step) {
     case OR_ASK_TRANS: pl->ask_trans = togb(pl->ask_trans); break;
     case OR_REAR_TOUCH: g_opt.rear_touch = togb(g_opt.rear_touch); break;
     case OR_TOUCH_SENS: g_opt.touch_sens = (unsigned char)wrapi(g_opt.touch_sens + step, 0, 2); break;
+    case OR_CAMERA_TYPE: g_opt.camera_type = (unsigned char)wrapi(g_opt.camera_type + step, 0, 2); break;
     }
 }
 
@@ -3576,6 +3580,7 @@ static uint32_t opt_row_value(int r) {
     static const uint32_t cam[5] = { 0xc3e9ae58u, 0x414f19d7u, 0x5ae3441fu, 0x1ea4cec2u, 0x916039b4u };
     static const uint32_t split[5] = { 0xd93f8f55u, 0xc44d3943u, 0x17fafc32u, 0x1ea459f8u, STR_OFF };
     static const uint32_t sens[3] = { 0x26033125u, 0x632b8da7u, 0x612af8a6u };    /* Low Medium High */
+    static const uint32_t camera_modes[3] = { STR_CAMERA_ORIGINAL, STR_CAMERA_FREEROAM, STR_CAMERA_ORBITAL };
     switch (r) {
     case OR_AUDIO_MODE: return g_opt.stereo ? 0x55da8bf8u : 0xc50fa35fu;
     case OR_JUMP_CAM: return g_opt.jump_cam ? STR_ON : STR_OFF;
@@ -3598,6 +3603,7 @@ static uint32_t opt_row_value(int r) {
     case OR_ASK_TRANS: return pl->ask_trans ? STR_ON : STR_OFF;
     case OR_REAR_TOUCH: return g_opt.rear_touch ? STR_ON : STR_OFF;
     case OR_TOUCH_SENS: return sens[g_opt.touch_sens > 2 ? 2 : g_opt.touch_sens];
+    case OR_CAMERA_TYPE: return camera_modes[g_opt.camera_type > 2 ? 0 : g_opt.camera_type];
     default: return 0;
     }
 }
@@ -3782,7 +3788,7 @@ int shop_pause_rows(int cat, int drag, int roam, int *rows, int cap) {
     case OC_AUDIO: for (int r = OR_MASTER; r <= OR_ENGINE; r++) PROW(r); break;
     case OC_GAMEPLAY:
         PROW(OR_JUMP_CAM); if (!drag) PROW(OR_MIRROR); PROW(OR_UNITS); if (!drag) PROW(OR_EXPLORE_MAP);
-        PROW(OR_RACE_MAP); PROW(OR_SAVE);
+        PROW(OR_RACE_MAP); PROW(OR_SAVE); PROW(OR_CAMERA_TYPE);
         break;
     case OC_PLAYER:
         if (!drag) PROW(OR_TRANS);
@@ -12311,7 +12317,8 @@ void shop_draw(Shop *s, const RProg *rp, GpuMesh *quad, int width, int height) {
         memset(otxt, 0, sizeof otxt);
         for (int k = 0; pk && k < s->opt_nrow; k++) {
             int on = qr_pool(pk, QP_NAME, k + 1), od = qr_pool(pk, QP_DATA, k + 1);
-            if (on >= 0) otxt[on] = str_get(s, k_or_name[s->opt_row[k]]);
+            if (on >= 0) otxt[on] = (s->opt_row[k] == OR_CAMERA_TYPE)
+                ? "Camera Type" : str_get(s, k_or_name[s->opt_row[k]]);
             if (od >= 0 && !opt_is_slider(s->opt_row[k])) otxt[od] = str_get(s, opt_row_value(s->opt_row[k]));
         }
         t.title = str_get(s, k_opt_main[s->opt_main.sel].str);
